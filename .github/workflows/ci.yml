@@ -17,6 +17,7 @@ jobs:
     # threads wait on ports (https://bugs.ruby-lang.org/issues/21037).
     env:
       RUBY_MN_THREADS: "0"
+      RUBY_MAX_CPU: "1"
     timeout-minutes: 20
     strategy:
       fail-fast: false
