@@ -1,0 +1,179 @@
+# Signatures for the public API.
+# Runtime:: and Core:: are internal, so they are deliberately left out.
+module RactorShepherd
+  VERSION: String
+
+  type child_id = Symbol | Integer | String
+  type restart_kind = :permanent | :transient | :temporary
+  type strategy = :one_for_one | :one_for_all | :rest_for_one
+  type timeout = Numeric | :infinity
+  type unresponsive_action = :escalate | :abandon
+  type restart_delay = nil | Numeric | Hash[Symbol, Numeric] | BackoffSpec
+  type child_status = :starting | :running | :stopping | :exited | :terminated
+                    | :restart_scheduled | :start_failed | :unresponsive | :removed
+  type event = Hash[Symbol, untyped]
+
+  class Error < StandardError
+  end
+
+  class InvalidSpec < Error
+  end
+
+  class UnsupportedRuby < Error
+  end
+
+  class StartError < Error
+  end
+
+  class SupervisorCrashed < Error
+  end
+
+  class MaxRestartsExceeded < Error
+  end
+
+  class ChildUnresponsive < Error
+  end
+
+  class CallTimeout < Error
+  end
+
+  class SupervisorDown < Error
+  end
+
+  class WorkerDown < Error
+  end
+
+  class ChildNotFound < Error
+  end
+
+  class ChildUnavailable < Error
+  end
+
+  class InvalidOperation < Error
+  end
+
+  class MaxChildrenReached < Error
+  end
+
+  class ProtocolError < Error
+  end
+
+  class ShutdownSignal < Exception
+  end
+
+  class BackoffSpec
+    attr_reader initial: Numeric
+    attr_reader max: Numeric
+    attr_reader factor: Numeric
+  end
+
+  class SupervisorSpec
+    attr_reader kind: (:static | :dynamic)
+    attr_reader strategy: strategy
+    attr_reader children: Array[ChildSpec]
+    attr_reader max_restarts: Integer
+    attr_reader max_seconds: Numeric
+    attr_reader max_children: Integer?
+    attr_reader on_unresponsive: unresponsive_action
+  end
+
+  class ChildSpec
+    attr_reader id: child_id?
+    attr_reader type: (:worker | :supervisor)
+    attr_reader start: (Class | SupervisorSpec)
+    attr_reader args: Array[untyped]
+    attr_reader kwargs: Hash[Symbol, untyped]
+    attr_reader restart: restart_kind
+    attr_reader shutdown_timeout: timeout
+    attr_reader start_timeout: timeout
+    attr_reader restart_delay: restart_delay
+  end
+
+  class ChildInfo
+    attr_reader id: child_id
+    attr_reader type: (:worker | :supervisor)
+    attr_reader status: child_status
+    attr_reader ref: (Ractor | SupervisorRef)?
+    attr_reader restart_count: Integer
+  end
+
+  class SupervisorRef
+    attr_reader name: (Symbol | String)
+    attr_reader path: String
+    attr_reader ractor: Ractor
+    attr_reader control_port: untyped
+
+    def which_children: (?timeout: Numeric) -> Array[ChildInfo]
+    def count_children: (?timeout: Numeric) -> Hash[Symbol, Integer]
+    def whereis: (child_id, ?timeout: Numeric) -> (Ractor | SupervisorRef)?
+    def lookup: (*child_id, ?retries: Integer, ?resolve_timeout: Numeric) -> Address
+    def start_child: (ChildSpec, ?timeout: Numeric) -> child_id
+    def terminate_child: (child_id, ?timeout: Numeric) -> :ok
+    def restart_child: (child_id, ?timeout: Numeric) -> :ok
+    def delete_child: (child_id, ?timeout: Numeric) -> :ok
+    def stop: (?Symbol, ?timeout: timeout) -> bool
+    def alive?: () -> bool
+    def join: () -> SupervisorRef
+  end
+
+  class Address
+    attr_reader path: Array[child_id]
+
+    def ractor: () -> (Ractor | SupervisorRef)
+    def resolve!: () -> (Ractor | SupervisorRef)
+    def cast: (untyped) -> :ok
+    def call: (untyped, ?timeout: timeout) -> untyped
+  end
+
+  interface _Logger
+    def info: (String) -> void
+    def warn: (String) -> void
+    def error: (String) -> void
+  end
+
+  module EventLogger
+    def self.start: (untyped port, ?logger: _Logger) -> Thread
+    def self.level_for: (event) -> (:info | :warn | :error)
+    def self.format_event: (event) -> String
+  end
+
+  module Worker
+    def run: (untyped ctx) -> untyped
+    def terminate: ((Symbol | Exception)) -> untyped
+  end
+
+  module Server
+    include Worker
+
+    def context: () -> untyped
+    def handle_call: (untyped) -> untyped
+    def handle_cast: (untyped) -> untyped
+  end
+
+  def self.worker: (child_id?, Class,
+                    ?args: Array[untyped], ?kwargs: Hash[Symbol, untyped],
+                    ?restart: restart_kind, ?shutdown_timeout: timeout,
+                    ?start_timeout: timeout, ?restart_delay: restart_delay) -> ChildSpec
+
+  def self.supervisor: (child_id, ?strategy: strategy, ?children: Array[ChildSpec],
+                        ?max_restarts: Integer, ?max_seconds: Numeric,
+                        ?on_unresponsive: unresponsive_action, ?restart: restart_kind,
+                        ?shutdown_timeout: timeout, ?start_timeout: timeout,
+                        ?restart_delay: restart_delay) -> ChildSpec
+
+  def self.dynamic_supervisor: (child_id, ?max_children: Integer?, ?max_restarts: Integer,
+                                ?max_seconds: Numeric, ?on_unresponsive: unresponsive_action,
+                                ?restart: restart_kind, ?shutdown_timeout: timeout,
+                                ?start_timeout: timeout, ?restart_delay: restart_delay) -> ChildSpec
+
+  def self.start: (name: (Symbol | String), ?strategy: strategy, ?children: Array[ChildSpec],
+                   ?max_restarts: Integer, ?max_seconds: Numeric,
+                   ?on_unresponsive: unresponsive_action, ?event_port: untyped,
+                   ?boot_timeout: timeout) -> SupervisorRef
+
+  def self.start_dynamic: (name: (Symbol | String), ?max_children: Integer?, ?max_restarts: Integer,
+                           ?max_seconds: Numeric, ?on_unresponsive: unresponsive_action,
+                           ?event_port: untyped, ?boot_timeout: timeout) -> SupervisorRef
+
+  def self.run: (**untyped) { (SupervisorRef) -> untyped } -> untyped
+end

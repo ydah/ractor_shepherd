@@ -1,0 +1,66 @@
+AllCops:
+  TargetRubyVersion: 4.0
+  NewCops: enable
+  SuggestExtensions: false
+  Exclude:
+    - "spike/**/*"
+    - "vendor/**/*"
+    - "examples/**/*"
+    - "bench/**/*"
+
+Style/FrozenStringLiteralComment:
+  Enabled: true
+
+# The loops that matter here tend to be long.
+Metrics/MethodLength:
+  Max: 40
+Metrics/AbcSize:
+  Max: 40
+Metrics/ClassLength:
+  Max: 400
+Metrics/ModuleLength:
+  Max: 300
+Metrics/CyclomaticComplexity:
+  Max: 15
+Metrics/PerceivedComplexity:
+  Max: 15
+Metrics/ParameterLists:
+  Max: 14
+  MaxOptionalParameters: 14
+Metrics/BlockLength:
+  Enabled: false
+Layout/LineLength:
+  Max: 120
+
+Naming/MethodParameterName:
+  AllowedNames: [e, i, n, id, at, to, ex]
+
+Lint/SuppressedException:
+  Enabled: false
+
+Style/MultilineBlockChain:
+  Enabled: false
+
+Style/StringLiterals:
+  EnforcedStyle: double_quotes
+Style/StringLiteralsInInterpolation:
+  EnforcedStyle: double_quotes
+Style/QuotedSymbols:
+  EnforcedStyle: double_quotes
+# :"$..." is this gem's reserved message prefix; looking like a global is deliberate.
+Lint/SymbolConversion:
+  Enabled: false
+
+# Ractor::ClosedError is a StopIteration, so `loop do` around Ractor or port work
+# exits silently instead of raising. `while true` is required instead.
+Style/InfiniteLoop:
+  Exclude:
+    - "lib/**/*.rb"
+    - "spec/**/*.rb"
+
+# The top level module is documented in lib/ractor_shepherd.rb.
+Style/Documentation:
+  Enabled: true
+  Exclude:
+    - "lib/ractor_shepherd/*.rb"
+    - "spec/**/*"

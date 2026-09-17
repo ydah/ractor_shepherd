@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Ruby ${{ matrix.ruby }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        ruby: ["4.0", "head"]
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      - name: Run the default task
+        run: bundle exec rake
+      - name: Run the stress specs
+        run: bundle exec rake spec:stress
+        env:
+          STRESS_CHILDREN: "50"
+          STRESS_RESTARTS: "10"
+      - name: Run each spec file in its own process
+        run: bundle exec rake spec:isolated
+        env:
+          STRESS_CHILDREN: "50"
+          STRESS_RESTARTS: "10"
