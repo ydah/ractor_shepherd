@@ -1,50 +1,68 @@
-# ractor_shepherd
+<div align="center">
+  <h1>ractor_shepherd</h1>
+  <p><strong>OTP-style supervision trees for Ruby Ractors with declarative restart strategies and graceful shutdown.</strong></p>
+  <p>
+    <a href="https://github.com/ydah/ractor_shepherd/actions/workflows/ci.yml"><img src="https://github.com/ydah/ractor_shepherd/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+    <img src="https://img.shields.io/badge/ruby-%3E%3D%204.0-CC342D.svg" alt="Ruby Version">
+    <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License">
+  </p>
+</div>
 
-[![CI](https://github.com/ydah/ractor_shepherd/actions/workflows/ci.yml/badge.svg)](https://github.com/ydah/ractor_shepherd/actions/workflows/ci.yml)
-[![Ruby 4.0+](https://img.shields.io/badge/ruby-4.0%2B-CC342D?logo=ruby&logoColor=white)](https://www.ruby-lang.org/)
-[![License: MIT](https://img.shields.io/github/license/ydah/ractor_shepherd)](LICENSE.txt)
+<div align="center">
+  <a href="#features">Features</a> ·
+  <a href="#installation">Installation</a> ·
+  <a href="#quick-start">Quick Start</a> ·
+  <a href="#worker-types">Worker Types</a> ·
+  <a href="#restart-strategies">Restart Strategies</a> ·
+  <a href="#how-it-works">How It Works</a> ·
+  <a href="#development">Development</a>
+</div>
 
-> OTP-style supervision trees for Ruby Ractors with declarative restart strategies and graceful shutdown.
+---
 
-`ractor_shepherd` brings Erlang/OTP-style supervision to Ruby's Ractor API. A
-supervisor watches child Ractors, restarts them according to a policy, and
-escalates failures when restarting stops helping.
+`ractor_shepherd` brings Erlang/OTP-style supervision to Ruby's Ractor API.
+Supervisors watch child Ractors, restart them according to a policy, and
+escalate failures when restarting stops helping.
 
-- Ruby 4.0 or later, including the Ractor API changes in Ruby 4.1
-- No runtime dependencies; standard library only
+## Features
+
+<a name="features"></a>
+
 - Static and dynamic supervisors with composable supervision trees
-- A low-level worker API and a GenServer-style message API
-
-## Contents
-
-- [Installation](#installation)
-- [A minimal example](#a-minimal-example)
-- [Worker types](#worker-types)
-- [Restart strategies](#restart-strategies)
-- [Dynamic supervisors](#dynamic-supervisors)
-- [Observability](#observability)
-- [Operational notes](#operational-notes)
-- [Examples](#examples)
-- [Development](#development)
-- [License](#license)
+- `:one_for_one`, `:one_for_all`, and `:rest_for_one` restart strategies
+- `:permanent`, `:transient`, and `:temporary` child restart policies
+- Low-level `Worker` loops or GenServer-style `Server` workers
+- Restart intensity limits and configurable restart backoff
+- Event ports, a built-in logger, and crash hints for common Ractor errors
+- Cooperative shutdown with per-child timeouts
+- Ruby 4.0 or later, with no runtime dependencies
 
 ## Installation
 
-Add `ractor_shepherd` to your Gemfile:
+<a name="installation"></a>
+
+Add to your Gemfile:
 
 ```ruby
 gem "ractor_shepherd"
 ```
 
-Then install the bundle:
+Then install:
 
-```console
+```bash
 bundle install
 ```
 
-`ractor_shepherd` requires Ruby 4.0 or later and `Ractor::Port`.
+### Requirements
 
-## A minimal example
+<a name="requirements"></a>
+
+- Ruby 4.0+
+- `Ractor::Port`
+
+## Quick Start
+
+<a name="quick-start"></a>
 
 ```ruby
 require "ractor_shepherd"
@@ -89,7 +107,9 @@ The block form starts the root supervisor, yields a `SupervisorRef`, and stops
 the supervisor when the block exits. `lookup` returns an address that follows a
 child across restarts.
 
-## Worker types
+## Worker Types
+
+<a name="worker-types"></a>
 
 ### `RactorShepherd::Worker`
 
@@ -151,7 +171,9 @@ ensure
 end
 ```
 
-## Restart strategies
+## Restart Strategies
+
+<a name="restart-strategies"></a>
 
 With children `[a, b, c, d]`, when `b` dies:
 
@@ -173,21 +195,9 @@ After more than `max_restarts` restarts within `max_seconds`, the supervisor
 crashes so its parent can decide what happens next. At the root,
 `SupervisorRef#join` raises `SupervisorCrashed`.
 
-Children can be supervisors too, so supervision trees compose naturally:
+## Dynamic Supervisors
 
-```ruby
-RactorShepherd.run(name: :root, children: [
-  RactorShepherd.worker(:cache, Cache),
-  RactorShepherd.supervisor(:jobs, strategy: :rest_for_one, children: [
-    RactorShepherd.worker(:fetcher, Fetcher),
-    RactorShepherd.worker(:parser, Parser)
-  ])
-]) do |sup|
-  sup.lookup(:jobs, :parser).cast(:refresh)
-end
-```
-
-## Dynamic supervisors
+<a name="dynamic-supervisors"></a>
 
 Use `start_dynamic` for children that come and go, such as connections or jobs:
 
@@ -208,6 +218,8 @@ is optional; `nil` means unlimited.
 
 ## Observability
 
+<a name="observability"></a>
+
 Pass an event port to `start` or `run` and either use the built-in logger or
 consume the event hashes yourself:
 
@@ -216,7 +228,7 @@ events = Ractor::Port.new
 RactorShepherd::EventLogger.start(events)
 
 sup = RactorShepherd.start(name: :root, event_port: events,
-                           children: [RactorShepherd.worker(:worker, Worker)])
+                           children: [RactorShepherd.worker(:counter, Counter)])
 ```
 
 Events include child starts and exits, restart scheduling, unresponsive
@@ -226,7 +238,54 @@ class, message, backtrace, and a `hint` for common Ractor errors.
 For custom reporting, read from the port in the Ractor that created it. See
 [`examples/crash_report.rb`](examples/crash_report.rb) for a complete example.
 
-## Operational notes
+## How It Works
+
+<a name="how-it-works"></a>
+
+1. Child specs are validated and copied into shareable data.
+2. A supervisor starts children in declaration order and monitors their Ractors.
+3. Each child runs as either a low-level `Worker` or a message-driven `Server`.
+4. When a child exits, the supervisor applies the declared strategy and restart policy.
+5. When restart intensity is exceeded, the failure is escalated to the parent supervisor.
+
+Supervisors can themselves be children, so trees compose naturally:
+
+```ruby
+RactorShepherd.run(name: :root, children: [
+  RactorShepherd.worker(:cache, Cache),
+  RactorShepherd.supervisor(:jobs, strategy: :rest_for_one, children: [
+    RactorShepherd.worker(:fetcher, Fetcher),
+    RactorShepherd.worker(:parser, Parser)
+  ])
+]) do |sup|
+  sup.lookup(:jobs, :parser).cast(:refresh)
+end
+```
+
+## Supervisor API
+
+<a name="supervisor-api"></a>
+
+| Entry point | Purpose |
+| --- | --- |
+| `RactorShepherd.start` | Start a static root supervisor |
+| `RactorShepherd.start_dynamic` | Start an empty dynamic supervisor |
+| `RactorShepherd.run` | Start, yield, and stop a root supervisor |
+| `RactorShepherd.worker` | Describe a worker child |
+| `RactorShepherd.supervisor` | Describe a nested static supervisor |
+| `RactorShepherd.dynamic_supervisor` | Describe a nested dynamic supervisor |
+
+From a `SupervisorRef`, use `lookup`, `whereis`, `which_children`, and
+`count_children` to inspect the tree. Use `start_child`, `terminate_child`,
+`restart_child`, and `delete_child` to manage static children at runtime.
+
+An `Address` sends `cast` messages without waiting and uses `call` for a
+synchronous reply from a `Server`. `call` does not retry automatically because
+the request may not be idempotent.
+
+## Operational Notes
+
+<a name="operational-notes"></a>
 
 ### Ractor constraints
 
@@ -269,6 +328,8 @@ Use the block form of `RactorShepherd.run` or stop the supervisor from `at_exit`
 
 ## Examples
 
+<a name="examples"></a>
+
 Runnable examples are in [`examples/`](examples):
 
 | File | What it shows |
@@ -281,26 +342,31 @@ Runnable examples are in [`examples/`](examples):
 
 Run one directly:
 
-```console
+```bash
 ruby examples/basic.rb
 ```
 
 ## Development
 
-```console
+<a name="development"></a>
+
+```bash
 bundle install
-bundle exec rake             # rubocop + lint:no_loop + specs + RBS validation
-bundle exec rake spec:core   # unit tests; no Ractors
-bundle exec rake spec:stress # stress tests
-bundle exec rake spec:isolated # one file per process; catches hangs
+bundle exec rake
+bundle exec rake spec:core
+bundle exec rake spec:stress
+bundle exec rake spec:isolated
 ```
 
+The default task runs RuboCop, the no-`loop` lint, specs, and RBS validation.
 Ractor compatibility is also checked with [`audition`](https://github.com/ruby/audition):
 
-```console
+```bash
 audition lib
 ```
 
 ## License
 
-MIT. See [`LICENSE.txt`](LICENSE.txt).
+<a name="license"></a>
+
+Released under the [MIT License](https://opensource.org/licenses/MIT).

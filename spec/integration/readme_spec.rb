@@ -6,7 +6,7 @@ RSpec.describe "README" do
   let(:readme) { File.read(File.expand_path("../../README.md", __dir__)) }
 
   it "has a minimal example that actually runs" do
-    source = readme[/## A minimal example\n\n```ruby\n(.*?)```/m, 1]
+    source = readme[/## Quick Start\n\n(?:<a name="quick-start"><\/a>\n\n)?```ruby\n(.*?)```/m, 1]
     expect(source).not_to be_nil
 
     Tempfile.create(["readme", ".rb"]) do |file|
